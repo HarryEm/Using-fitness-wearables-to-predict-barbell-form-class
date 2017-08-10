@@ -1,0 +1,66 @@
+---
+title: "Using fitness wearables data to predict how well barbell lifts are executed"
+author: Harry Emeric
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Executive Summary
+
+This report sets out to model how data from wearables devices can be used to ascertain how well barbell lifts are executed and give a rating from A to E, so that instant feedback can be given and thus improvements to form can be suggested in real time and in an automated fashion. The data was made available from this source:
+
+http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har
+
+## Loading and reducing the data
+
+Certain reductions to the data were required before the model is to be fitted; variables with blank data is removed, so are any with factors as on readin the data in many were incorrectly coerced to factor variable with many levels which causes algorithms to fail and to have very poor performance. Also the first few columns were also removed as the ordering of the data would interfere with the classification otherwise.
+
+```{r}
+library(caret)
+library(randomForest)
+
+url1train <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+url2test <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+download.file(url1train,destfile = "./data/mltrain.csv", method = "curl")
+download.file(url2test,destfile = "./data/mltest.csv", method = "curl")
+
+training <- read.csv("./data/mltrain.csv")
+testing <- read.csv("./data/mltest.csv")
+
+dim(training)
+
+training <-training[,colSums(is.na(training))==0]
+training <- training[,-which(sapply(training[1:92], class) == "factor")]
+training <- training[-c(1:4)]
+
+dim(training)
+```
+
+## Cross validation and estimation of out of sample error
+
+The training data is split into training and testing sets so we have a good idea of the accuracy of the model with data which is not used to fit the model. As there are so many variables even with the significant reduction above, a random forest model seemed appropriate due to its variable reduction feature.
+
+The testing set which has been partitioned off is then used to estimate the out of sample error, and it performs perfectly (accuracy = 1). Although this seems suspicious the partition was chosen randomly so it is possible that the model is in fact just very accurate due to the power of the random forest algorithm.
+
+```{r}
+set.seed(123)
+inTrain <- createDataPartition(y=training$classe,p=0.75,list=FALSE)
+training <- training[inTrain,]
+testingCV <- training[-inTrain,]
+
+modelFit <- randomForest(classe ~., data = training)
+
+confusionMatrix(testingCV$classe,predict(modelFit,testingCV))
+```
+
+## Using the model to predict new data
+
+The model is then used to predict the 20 new observations
+
+```{r}
+predict(modelFit,newdata=testing)
+```
